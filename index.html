@@ -1,0 +1,797 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cell Watch Live</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" href="icon-192.png">
+<meta name="theme-color" content="#0e7c86">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Cell Watch">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.52.1/dist/umd/supabase.js"></script>
+<style>
+  :root{
+    --bg:#eef1ef; --surface:#ffffff; --surface-2:#e3e9e6; --border:#d2dad6; --border-soft:#e3e9e6;
+    --ink:#142120; --ink-2:#4b5957; --muted:#7c8b88;
+    --accent:#0e7c86; --accent-ink:#063a40; --accent-soft:#d9edee;
+    --good:#1e8e5a; --good-fg:#1e7a4c; --good-bg:#e1f3e9;
+    --warning:#c6841a; --warning-fg:#92600a; --warning-bg:#fbebd2;
+    --critical:#c1392b; --critical-fg:#a5312a; --critical-bg:#fbe2df;
+    --shadow: 0 1px 2px rgba(20,33,32,0.06), 0 8px 24px -12px rgba(20,33,32,0.18);
+    --radius-s:8px; --radius-m:14px; --radius-l:20px;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#0e1615; --surface:#16211f; --surface-2:#1e2b29; --border:#2b3a37; --border-soft:#243330;
+      --ink:#e8efec; --ink-2:#afc0bc; --muted:#7e938e;
+      --accent:#3fc1c9; --accent-ink:#b7ecef; --accent-soft:#163538;
+      --good:#3fb673; --good-fg:#79dba3; --good-bg:#163526;
+      --warning:#e0a83b; --warning-fg:#f0c066; --warning-bg:#3a2c12;
+      --critical:#e0645a; --critical-fg:#f19187; --critical-bg:#3a1e1b;
+      --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 12px 28px -14px rgba(0,0,0,0.55);
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#0e1615; --surface:#16211f; --surface-2:#1e2b29; --border:#2b3a37; --border-soft:#243330;
+    --ink:#e8efec; --ink-2:#afc0bc; --muted:#7e938e;
+    --accent:#3fc1c9; --accent-ink:#b7ecef; --accent-soft:#163538;
+    --good:#3fb673; --good-fg:#79dba3; --good-bg:#163526;
+    --warning:#e0a83b; --warning-fg:#f0c066; --warning-bg:#3a2c12;
+    --critical:#e0645a; --critical-fg:#f19187; --critical-bg:#3a1e1b;
+    --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 12px 28px -14px rgba(0,0,0,0.55);
+    color-scheme: dark;
+  }
+  *{box-sizing:border-box;}
+  html,body{background:var(--bg);}
+  body{margin:0;color:var(--ink);font-family:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;-webkit-font-smoothing:antialiased;padding-inline:16px;}
+  .wrap{max-width:1180px;margin:0 auto;padding-block:28px 64px;}
+  h1,h2,h3{font-family:"Archivo","IBM Plex Sans",sans-serif;font-weight:800;letter-spacing:-0.01em;text-wrap:balance;margin:0;}
+  .mono{font-family:"IBM Plex Mono",ui-monospace,monospace;font-variant-numeric:tabular-nums;}
+  .eyebrow{font-family:"IBM Plex Mono",monospace;font-size:11px;letter-spacing:0.09em;text-transform:uppercase;color:var(--muted);}
+  a{color:inherit;} button{font:inherit;}
+
+  .topbar{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:8px;}
+  .brand{display:flex;align-items:center;gap:12px;}
+  .brand-mark{width:38px;height:38px;border-radius:10px;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;flex:none;}
+  .brand h1{font-size:22px;color:var(--ink);display:flex;align-items:center;gap:9px;}
+  .live-badge{font-family:"IBM Plex Mono";font-size:10px;letter-spacing:0.06em;background:var(--good-bg);color:var(--good-fg);padding:2px 8px;border-radius:999px;font-weight:600;}
+  .live-badge.stale{background:var(--warning-bg);color:var(--warning-fg);}
+  .live-badge.off{background:var(--surface-2);color:var(--muted);}
+  .brand p{margin:2px 0 0;color:var(--ink-2);font-size:13.5px;}
+  .top-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+  .sync-note{font-size:11.5px;color:var(--muted);margin-bottom:22px;font-family:"IBM Plex Mono";}
+
+  .btn{display:inline-flex;align-items:center;gap:7px;padding:9px 14px;border-radius:999px;border:1px solid var(--border);background:var(--surface);color:var(--ink);cursor:pointer;font-size:13.5px;font-weight:500;transition:background .15s ease,border-color .15s ease,transform .05s ease;}
+  .btn:hover{border-color:var(--accent);}
+  .btn:active{transform:scale(0.98);}
+  .btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px;}
+  .btn-primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600;}
+  .btn-primary:hover{filter:brightness(1.05);}
+  .btn-ghost{border-color:transparent;background:transparent;}
+  .btn-ghost:hover{background:var(--surface-2);}
+  .btn-danger{border-color:var(--critical);color:var(--critical-fg);}
+  .btn-danger:hover{background:var(--critical-bg);}
+  .btn[disabled]{opacity:0.5;cursor:not-allowed;}
+  .icon{width:16px;height:16px;flex:none;} .icon-sm{width:14px;height:14px;}
+
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;margin-bottom:18px;}
+  .stat{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-m);padding:16px 18px;box-shadow:var(--shadow);}
+  .stat .eyebrow{display:block;margin-bottom:8px;}
+  .stat .value{font-family:"Archivo",sans-serif;font-size:30px;font-weight:800;line-height:1;}
+  .stat .value .unit{font-size:16px;font-weight:600;color:var(--ink-2);margin-left:2px;}
+  .stat .sub{margin-top:6px;font-size:12.5px;color:var(--muted);}
+  .stat.attn .value{color:var(--warning-fg);}
+  .stat.attn.has-critical .value{color:var(--critical-fg);}
+
+  .alerts{background:var(--warning-bg);border:1px solid color-mix(in oklab, var(--warning) 45%, var(--border));border-radius:var(--radius-m);padding:13px 16px;margin-bottom:18px;display:flex;align-items:flex-start;gap:12px;}
+  .alerts.critical{background:var(--critical-bg);border-color:color-mix(in oklab, var(--critical) 45%, var(--border));}
+  .alerts .a-icon{color:var(--warning-fg);flex:none;margin-top:1px;}
+  .alerts.critical .a-icon{color:var(--critical-fg);}
+  .alerts .a-body{flex:1;min-width:0;}
+  .alerts .a-title{font-weight:600;font-size:13.5px;color:var(--ink);}
+  .alerts .a-chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;}
+  .a-chip{display:inline-flex;align-items:center;gap:6px;background:var(--surface);border:1px solid var(--border);border-radius:999px;padding:4px 10px 4px 6px;font-size:12.5px;cursor:pointer;color:var(--ink);}
+  .a-chip:hover{border-color:var(--accent);}
+  .a-chip .dot{width:7px;height:7px;border-radius:50%;flex:none;}
+  .alerts .close{margin-left:auto;flex:none;}
+
+  .filter-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:16px;}
+  .chips{display:flex;gap:6px;flex-wrap:wrap;}
+  .chip{padding:6px 12px;border-radius:999px;border:1px solid var(--border);background:var(--surface);font-size:12.5px;font-weight:500;color:var(--ink-2);cursor:pointer;white-space:nowrap;}
+  .chip[aria-pressed="true"]{background:var(--accent-soft);border-color:var(--accent);color:var(--accent-ink);}
+  .search{margin-left:auto;position:relative;min-width:180px;flex:1 1 200px;max-width:280px;}
+  .search input{width:100%;padding:8px 12px 8px 32px;border-radius:999px;border:1px solid var(--border);background:var(--surface);color:var(--ink);font-size:13px;}
+  .search input:focus-visible{outline:2px solid var(--accent);outline-offset:1px;}
+  .search svg{position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--muted);width:14px;height:14px;}
+
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(258px,1fr));gap:14px;}
+  .empty{grid-column:1/-1;text-align:center;padding:56px 20px;color:var(--ink-2);border:1px dashed var(--border);border-radius:var(--radius-m);background:var(--surface);}
+  .empty h3{font-size:16px;margin-bottom:6px;color:var(--ink);}
+  .empty code{background:var(--surface-2);padding:2px 6px;border-radius:4px;font-family:"IBM Plex Mono";font-size:12px;}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-m);padding:16px;box-shadow:var(--shadow);cursor:pointer;text-align:left;display:flex;flex-direction:column;gap:12px;transition:border-color .15s ease,transform .05s ease;}
+  .card:hover{border-color:var(--accent);}
+  .card:active{transform:scale(0.995);}
+  .card:focus-visible{outline:2px solid var(--accent);outline-offset:2px;}
+  .card-head{display:flex;align-items:flex-start;gap:10px;}
+  .type-icon{width:30px;height:30px;border-radius:9px;background:var(--surface-2);display:flex;align-items:center;justify-content:center;flex:none;color:var(--ink-2);}
+  .card-head .names{min-width:0;flex:1;}
+  .card-head .device-name{font-weight:600;font-size:14.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .card-head .group-badge{font-size:11.5px;color:var(--muted);margin-top:1px;}
+  .status-pill{font-size:11px;font-weight:600;padding:3px 8px;border-radius:999px;flex:none;letter-spacing:0.01em;}
+  .status-pill.good{background:var(--good-bg);color:var(--good-fg);}
+  .status-pill.warning{background:var(--warning-bg);color:var(--warning-fg);}
+  .status-pill.critical{background:var(--critical-bg);color:var(--critical-fg);}
+  .status-pill.stale-pill{background:var(--surface-2);color:var(--muted);}
+  .card.stale{filter:grayscale(0.9) opacity(0.7);}
+  .card.stale:hover{border-color:var(--border);}
+  .card.charging{border-color:var(--accent);background:color-mix(in oklab, var(--accent) 7%, var(--surface));box-shadow:0 0 0 1px var(--accent), var(--shadow);}
+  .card.charging:hover{border-color:var(--accent);}
+  .batt-row{display:flex;align-items:center;gap:10px;}
+  .batt-pct{font-family:"IBM Plex Mono";font-size:20px;font-weight:600;min-width:52px;}
+  .batt-meta{font-size:11.5px;color:var(--muted);margin-top:2px;}
+  .spark-wrap{margin-top:-2px;} .spark-wrap svg{display:block;width:100%;height:36px;}
+  .batt-glyph{flex:none;} .batt-glyph .body{fill:none;stroke:var(--ink-2);stroke-width:1.6;} .batt-glyph .nub{fill:var(--ink-2);}
+
+  .scrim{position:fixed;inset:0;background:rgba(10,16,15,0.38);opacity:0;pointer-events:none;transition:opacity .18s ease;z-index:40;}
+  .scrim.open{opacity:1;pointer-events:auto;}
+  .drawer{position:fixed;top:0;right:0;height:100%;width:min(440px,100vw);background:var(--surface);border-left:1px solid var(--border);box-shadow:-16px 0 40px -20px rgba(0,0,0,0.35);transform:translateX(100%);transition:transform .2s ease;z-index:41;display:flex;flex-direction:column;}
+  .drawer.open{transform:translateX(0);}
+  .drawer-head{display:flex;align-items:center;justify-content:space-between;padding:18px 20px;border-bottom:1px solid var(--border);}
+  .drawer-head h2{font-size:17px;}
+  .drawer-body{padding:20px;overflow-y:auto;flex:1;display:flex;flex-direction:column;gap:20px;}
+  .drawer-foot{padding:16px 20px;border-top:1px solid var(--border);display:flex;justify-content:space-between;gap:10px;}
+  .field{display:flex;flex-direction:column;gap:6px;}
+  .field label{font-size:12px;font-weight:600;color:var(--ink-2);text-transform:uppercase;letter-spacing:0.04em;}
+  .field input[type="text"],.field input[type="number"],.field input[type="url"],.field input[type="password"],.field select{padding:9px 11px;border-radius:var(--radius-s);border:1px solid var(--border);background:var(--bg);color:var(--ink);font-size:14px;font-family:inherit;width:100%;}
+  .field input:focus-visible,.field select:focus-visible{outline:2px solid var(--accent);outline-offset:1px;border-color:var(--accent);}
+  .field-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+  .checkbox-row{display:flex;align-items:center;gap:9px;}
+  .checkbox-row input{width:16px;height:16px;accent-color:var(--accent);}
+  .detail-hero{display:flex;flex-direction:column;align-items:center;gap:10px;padding:6px 0 4px;}
+  .detail-hero.stale{filter:grayscale(0.9) opacity(0.75);}
+  .detail-hero.charging{background:color-mix(in oklab, var(--accent) 8%, transparent);border-radius:var(--radius-m);}
+  .detail-hero .batt-pct{font-size:34px;}
+  .detail-hero .status-pill{font-size:12px;}
+  .chart-box{background:var(--bg);border:1px solid var(--border-soft);border-radius:var(--radius-m);padding:12px 12px 6px;position:relative;}
+  .chart-box svg{display:block;width:100%;height:150px;overflow:visible;}
+  .chart-legend{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-top:4px;font-family:"IBM Plex Mono";}
+  .tooltip{position:absolute;pointer-events:none;background:var(--ink);color:var(--bg);font-family:"IBM Plex Mono";font-size:11px;padding:4px 8px;border-radius:6px;transform:translate(-50%,-120%);white-space:nowrap;opacity:0;transition:opacity .1s;z-index:5;}
+  :root:not([data-theme="light"]) .tooltip{background:var(--surface-2);color:var(--ink);border:1px solid var(--border);}
+  :root[data-theme="dark"] .tooltip{background:var(--surface-2);color:var(--ink);border:1px solid var(--border);}
+  .tooltip.show{opacity:1;}
+  .quicklog{display:flex;gap:8px;align-items:flex-end;} .quicklog .field{flex:1;}
+  .note{font-size:12px;color:var(--muted);line-height:1.5;} .note strong{color:var(--ink-2);}
+  .note code{background:var(--surface-2);padding:1px 5px;border-radius:4px;font-family:"IBM Plex Mono";}
+
+  .toast-stack{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);z-index:60;display:flex;flex-direction:column;gap:8px;align-items:center;}
+  .toast{background:var(--ink);color:var(--bg);padding:9px 16px;border-radius:999px;font-size:13px;box-shadow:var(--shadow);opacity:0;transform:translateY(6px);transition:opacity .18s,transform .18s;}
+  :root:not([data-theme="light"]) .toast{background:var(--surface-2);color:var(--ink);border:1px solid var(--border);}
+  :root[data-theme="dark"] .toast{background:var(--surface-2);color:var(--ink);border:1px solid var(--border);}
+  .toast.show{opacity:1;transform:translateY(0);}
+
+  .settings-pop{position:absolute;top:calc(100% + 8px);right:0;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-m);box-shadow:var(--shadow);padding:16px;width:300px;z-index:30;display:none;flex-direction:column;gap:14px;}
+  .settings-pop.open{display:flex;}
+  .settings-anchor{position:relative;}
+  .thresh-row{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:13px;}
+  .thresh-row input{width:64px;padding:6px 8px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--ink);font-family:"IBM Plex Mono";}
+  hr.hair{border:none;border-top:1px solid var(--border);margin:0;}
+
+  .gate-screen{max-width:400px;margin:14vh auto 0;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-l);padding:32px 28px;box-shadow:var(--shadow);text-align:center;}
+  .gate-mark{width:44px;height:44px;border-radius:12px;background:var(--accent);display:flex;align-items:center;justify-content:center;margin:0 auto 16px;}
+  .gate-screen h2{font-size:20px;margin-bottom:8px;}
+  .gate-screen p{color:var(--ink-2);font-size:13.5px;line-height:1.6;margin:0 0 18px;}
+  .gate-screen .note{text-align:left;}
+  .btn-google{gap:10px;}
+  .account-row{display:flex;align-items:center;gap:10px;}
+  .account-avatar{width:32px;height:32px;border-radius:50%;background:var(--accent-soft);color:var(--accent-ink);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex:none;}
+  .account-email{font-size:13px;color:var(--ink);word-break:break-all;}
+
+  @media (prefers-reduced-motion: reduce){.drawer,.scrim,.toast,.card,.btn{transition:none !important;}}
+  @media (max-width:520px){.stats{grid-template-columns:repeat(2,1fr);} .drawer{width:100vw;} .search{max-width:none;flex-basis:100%;order:3;}}
+</style>
+</head>
+<body>
+
+<div class="wrap" id="app" hidden>
+  <div class="topbar">
+    <div class="brand">
+      <div class="brand-mark" aria-hidden="true">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><rect x="2" y="7" width="17" height="10" rx="2.5" stroke="white" stroke-width="1.8"/><rect x="20" y="10" width="2.2" height="4" rx="1" fill="white"/><path d="M8 9.5L5.8 12.6H8.6L6.6 15.5" stroke="white" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <div>
+        <h1>Cell Watch Live <span class="live-badge" id="liveBadge">connecting…</span></h1>
+        <p>Real battery data from your devices</p>
+      </div>
+    </div>
+    <div class="top-actions">
+      <button class="btn btn-primary" id="installBtn" hidden>
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3v12m0 0-4-4m4 4 4-4M5 21h14"/></svg>
+        Install app
+      </button>
+      <button class="btn" id="syncBtn">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 12a9 9 0 1 1-2.6-6.4M21 4v5h-5"/></svg>
+        Sync now
+      </button>
+      <div class="settings-anchor">
+        <button class="btn btn-ghost" id="settingsBtn" aria-haspopup="true" aria-expanded="false">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 13a7.6 7.6 0 0 0 0-2l2-1.6-2-3.4-2.4 1a7.7 7.7 0 0 0-1.7-1L15 3h-6l-.3 2.6a7.7 7.7 0 0 0-1.7 1l-2.4-1-2 3.4L4.6 11a7.6 7.6 0 0 0 0 2l-2 1.6 2 3.4 2.4-1a7.7 7.7 0 0 0 1.7 1L9 21h6l.3-2.6a7.7 7.7 0 0 0 1.7-1l2.4 1 2-3.4-2-1.6Z"/></svg>
+          Settings
+        </button>
+        <div class="settings-pop" id="settingsPop">
+          <div>
+            <div class="eyebrow" style="margin-bottom:8px;">Alert thresholds</div>
+            <div class="thresh-row" style="margin-bottom:8px;"><span>Low battery below</span><span><input type="number" id="lowThreshInput" min="1" max="99"> %</span></div>
+            <div class="thresh-row"><span>Critical below</span><span><input type="number" id="critThreshInput" min="1" max="99"> %</span></div>
+          </div>
+          <hr class="hair">
+          <div>
+            <div class="eyebrow" style="margin-bottom:8px;">Account</div>
+            <div class="account-row" style="margin-bottom:10px;">
+              <div class="account-avatar" id="acctAvatar">?</div>
+              <div class="account-email" id="acctEmail">—</div>
+            </div>
+            <button class="btn" id="signOutBtn" style="width:100%;justify-content:center;">Sign out</button>
+          </div>
+          <hr class="hair">
+          <p class="note">Battery data here is shared across everyone signed in on this dashboard.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="sync-note" id="syncNote">&nbsp;</div>
+  <div class="alerts" id="iosInstallHint" style="display:none;background:var(--accent-soft);border-color:var(--accent);margin-bottom:18px;">
+    <svg class="icon a-icon" viewBox="0 0 24 24" fill="none" stroke="var(--accent-ink)" stroke-width="1.8"><path d="M12 16V4m0 0-4 4m4-4 4 4M5 20h14"/></svg>
+    <div class="a-body"><div class="a-title" style="color:var(--accent-ink);">Install this on your home screen</div>
+      <div style="font-size:12.5px;color:var(--ink-2);margin-top:4px;">Tap the Share icon in Safari's toolbar, then <strong>Add to Home Screen</strong>.</div></div>
+    <button class="btn btn-ghost close" id="iosHintClose" aria-label="Dismiss"><svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+  </div>
+
+  <div class="stats" id="statsRow"></div>
+  <div id="alertsBox"></div>
+
+  <div class="filter-row">
+    <div class="chips" id="groupChips"></div>
+    <div class="search">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.2-3.2"/></svg>
+      <input type="text" id="searchInput" placeholder="Search devices…" aria-label="Search devices">
+    </div>
+  </div>
+
+  <div class="grid" id="deviceGrid"></div>
+</div>
+
+<div class="gate-screen" id="signInScreen" hidden>
+  <div class="gate-mark" aria-hidden="true">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><rect x="2" y="7" width="17" height="10" rx="2.5" stroke="white" stroke-width="1.8"/><rect x="20" y="10" width="2.2" height="4" rx="1" fill="white"/><path d="M8 9.5L5.8 12.6H8.6L6.6 15.5" stroke="white" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+  </div>
+  <h2>Cell Watch</h2>
+  <p>Sign in to see real battery status across your devices.</p>
+  <button class="btn btn-primary btn-google" id="googleSignInBtn" style="width:100%;justify-content:center;">
+    <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.9 32.6 29.4 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.1 8 3l6-6C34.5 5.5 29.5 3.5 24 3.5 12.7 3.5 3.5 12.7 3.5 24S12.7 44.5 24 44.5c11.3 0 20.5-9.2 20.5-20.5 0-1.4-.2-2.7-.4-4Z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.6 15.6 18.9 13 24 13c3.1 0 5.8 1.1 8 3l6-6C34.5 5.5 29.5 3.5 24 3.5 15.9 3.5 8.9 8.1 6.3 14.7Z"/><path fill="#4CAF50" d="M24 44.5c5.4 0 10.2-1.8 14-4.9l-6.5-5.5c-2 1.5-4.6 2.4-7.5 2.4-5.4 0-9.9-3.4-11.5-8.2l-6.6 5.1C9 39.7 15.9 44.5 24 44.5Z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.1-4 5.4l6.5 5.5C41.5 36.2 44.5 30.6 44.5 24c0-1.4-.2-2.7-.9-3.5Z"/></svg>
+    Sign in with Google
+  </button>
+  <p class="note" style="margin-top:16px;">Only invited family members can see this dashboard.</p>
+</div>
+
+<div class="gate-screen" id="notAuthorizedScreen" hidden>
+  <h2>Not on the list yet</h2>
+  <p>You're signed in as <strong id="deniedEmail" class="mono"></strong>, but this account hasn't been invited to Cell Watch.</p>
+  <p class="note">Ask whoever set this up to add your email, or try a different Google account.</p>
+  <button class="btn" id="tryAnotherBtn" style="width:100%;justify-content:center;margin-top:6px;">Use a different account</button>
+</div>
+
+<div class="scrim" id="scrim"></div>
+<div class="drawer" id="drawer" role="dialog" aria-modal="true" aria-labelledby="drawerTitle">
+  <div class="drawer-head"><h2 id="drawerTitle">Device</h2>
+    <button class="btn btn-ghost" id="drawerClose" aria-label="Close"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+  </div>
+  <div class="drawer-body" id="drawerBody"></div>
+  <div class="drawer-foot" id="drawerFoot"></div>
+</div>
+
+<div class="toast-stack" id="toastStack"></div>
+
+<script>
+(function(){
+  "use strict";
+
+  var TYPES = [
+    {id:"phone", label:"Phone"}, {id:"laptop", label:"Laptop"}, {id:"tablet", label:"Tablet"},
+    {id:"wearable", label:"Wearable"}, {id:"earbuds", label:"Earbuds"}, {id:"other", label:"Other"}
+  ];
+  var TYPE_LABEL = {}; TYPES.forEach(function(t){ TYPE_LABEL[t.id]=t.label; });
+  var ICONS = {
+    phone:'<rect x="7" y="2.5" width="10" height="19" rx="2.2"/><line x1="10" y1="18" x2="14" y2="18"/>',
+    laptop:'<rect x="4" y="5" width="16" height="10.5" rx="1.4"/><path d="M2.5 19.5h19l-1.4-3H3.9l-1.4 3Z"/>',
+    tablet:'<rect x="5" y="3" width="14" height="18" rx="2"/><line x1="10.5" y1="18" x2="13.5" y2="18"/>',
+    wearable:'<rect x="8" y="6" width="8" height="12" rx="2.4"/><path d="M9.5 6V3.6h5V6M9.5 18v2.4h5V18"/>',
+    earbuds:'<circle cx="8" cy="9" r="3"/><circle cx="16" cy="9" r="3"/><path d="M8 12v3.2a2.6 2.6 0 0 0 5.2 0M16 12v3.2a2.6 2.6 0 0 1-5.2 0"/>',
+    other:'<rect x="4" y="8" width="16" height="9" rx="2"/><path d="M9 8V5.6A2.6 2.6 0 0 1 11.6 3h.8A2.6 2.6 0 0 1 15 5.6V8"/>'
+  };
+  var DEFAULT_THRESHOLDS = {low:20, critical:10};
+  var POLL_MS = 20000;
+  var HISTORY_PER_DEVICE = 40;
+  var STALE_MS = 30 * 60 * 1000; // grey a device out once it hasn't reported in this long
+
+  /* Admin-only: fill these in once before hosting this file. End users never
+     see these values or any Supabase-related wording — they only ever see
+     the Google sign-in screen and the dashboard. */
+  var SUPABASE_URL = "https://frmngfpsvlyvofoahffy.supabase.co";
+  var SUPABASE_ANON_KEY = "sb_publishable_0lPFl_QQu7TgOEbd1ovLHQ_OymLc1jf";
+  var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  function el(tag, attrs, html){ var e=document.createElement(tag); if(attrs) Object.keys(attrs).forEach(function(k){ if(k==="class") e.className=attrs[k]; else e.setAttribute(k, attrs[k]); }); if(html!==undefined) e.innerHTML=html; return e; }
+  function clamp(n,lo,hi){ return Math.max(lo, Math.min(hi,n)); }
+  function nowIso(){ return new Date().toISOString(); }
+  function relTime(iso){ var d=new Date(iso); var s=Math.max(1, Math.round((Date.now()-d.getTime())/1000)); if(s<60) return "just now"; var m=Math.round(s/60); if(m<60) return m+"m ago"; var h=Math.round(m/60); if(h<24) return h+"h ago"; return Math.round(h/24)+"d ago"; }
+  function isStale(iso){ if(!iso) return true; return (Date.now() - new Date(iso).getTime()) > STALE_MS; }
+  function statusOf(level,t){ if(level<=t.critical) return "critical"; if(level<=t.low) return "warning"; return "good"; }
+  function statusLabel(s){ return s==="critical"?"Critical":s==="warning"?"Low":"Good"; }
+  function escapeHtml(s){ return String(s==null?"":s).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c];}); }
+  function slugify(s){ return String(s).toLowerCase().trim().replace(/[^a-z0-9]+/g,"-").replace(/(^-|-$)/g,"") || ("device-"+Date.now()); }
+
+  function toast(msg){
+    var stack=document.getElementById("toastStack");
+    var t=el("div",{class:"toast"}, escapeHtml(msg));
+    stack.appendChild(t);
+    requestAnimationFrame(function(){ t.classList.add("show"); });
+    setTimeout(function(){ t.classList.remove("show"); setTimeout(function(){ t.remove(); },200); }, 2400);
+  }
+
+  function batteryGlyphSVG(level,status,charging,w,h){
+    w=w||40; h=h||20; var bodyW=w-5, bodyH=h, nubW=3.4, nubH=h*0.42, pad=2.6;
+    var innerW=bodyW-pad*2, innerH=bodyH-pad*2;
+    var fillW=Math.max(0,(clamp(level,0,100)/100)*innerW);
+    var color="var(--"+status+")";
+    var bolt = charging ? '<path d="M'+(bodyW/2+1)+' '+(pad+1)+' l-4.6 6.4h3.6l-2.4 5.4 5.6-7h-3.6z" fill="var(--accent)" stroke="none"/>' : "";
+    return '<svg class="batt-glyph" width="'+w+'" height="'+h+'" viewBox="0 0 '+w+' '+h+'" aria-hidden="true">'
+      +'<rect class="body" x="1" y="1" width="'+(bodyW-2)+'" height="'+(bodyH-2)+'" rx="4"/>'
+      +'<rect class="nub" x="'+(bodyW+0.6)+'" y="'+((h-nubH)/2)+'" width="'+nubW+'" height="'+nubH+'" rx="1"/>'
+      +'<rect x="'+pad+'" y="'+pad+'" width="'+innerW.toFixed(1)+'" height="'+innerH+'" rx="2" fill="'+color+'"/>'
+      +bolt+'</svg>';
+  }
+  function sparklineSVG(history,status,w,h){
+    w=w||220; h=h||36; var pts=history.slice(-16);
+    if(pts.length<2) return '<svg viewBox="0 0 '+w+' '+h+'"><line x1="0" y1="'+(h-3)+'" x2="'+w+'" y2="'+(h-3)+'" stroke="var(--border)" stroke-width="1"/></svg>';
+    var padY=4;
+    var coords=pts.map(function(p,i){ var x=(i/(pts.length-1))*w; var y=padY+(1-clamp(p.level,0,100)/100)*(h-padY*2); return [x,y]; });
+    var line=coords.map(function(c,i){ return (i===0?"M":"L")+c[0].toFixed(1)+","+c[1].toFixed(1); }).join(" ");
+    var area=line+" L"+w+","+h+" L0,"+h+" Z";
+    var color="var(--"+status+")"; var last=coords[coords.length-1];
+    var gid="sg"+Math.random().toString(36).slice(2,8);
+    return '<svg viewBox="0 0 '+w+' '+h+'" preserveAspectRatio="none">'
+      +'<defs><linearGradient id="'+gid+'" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="'+color+'" stop-opacity="0.28"/><stop offset="100%" stop-color="'+color+'" stop-opacity="0"/></linearGradient></defs>'
+      +'<path d="'+area+'" fill="url(#'+gid+')" stroke="none"/>'
+      +'<path d="'+line+'" fill="none" stroke="'+color+'" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>'
+      +'<circle cx="'+last[0].toFixed(1)+'" cy="'+last[1].toFixed(1)+'" r="2.6" fill="'+color+'"/></svg>';
+  }
+  function renderDetailChart(container,history,thresholds){
+    var w=380,h=150,padL=30,padR=8,padT=10,padB=10, plotW=w-padL-padR, plotH=h-padT-padB;
+    container.innerHTML="";
+    var box=el("div",{class:"chart-box"});
+    var pts=history.slice(-HISTORY_PER_DEVICE);
+    if(pts.length<2){ box.appendChild(el("div",{style:"padding:40px 0;text-align:center;color:var(--muted);font-size:13px;"},"Not enough readings yet for a chart.")); container.appendChild(box); return; }
+    function xAt(i){ return padL+(i/(pts.length-1))*plotW; }
+    function yAt(level){ return padT+(1-clamp(level,0,100)/100)*plotH; }
+    var lastStatus=statusOf(pts[pts.length-1].level,thresholds);
+    var color="var(--"+lastStatus+")";
+    var coords=pts.map(function(p,i){ return [xAt(i), yAt(p.level)]; });
+    var line=coords.map(function(c,i){ return (i===0?"M":"L")+c[0].toFixed(1)+","+c[1].toFixed(1); }).join(" ");
+    var area=line+" L"+xAt(pts.length-1).toFixed(1)+","+(padT+plotH)+" L"+padL+","+(padT+plotH)+" Z";
+    var grid=[0,50,100].map(function(v){ var y=yAt(v); return '<line x1="'+padL+'" x2="'+(padL+plotW)+'" y1="'+y+'" y2="'+y+'" stroke="var(--border-soft)" stroke-width="1"/><text x="'+(padL-8)+'" y="'+(y+3)+'" text-anchor="end" font-size="9" fill="var(--muted)" font-family="IBM Plex Mono">'+v+'</text>'; }).join("");
+    function refLine(v,label){ if(v<=0||v>=100) return ""; var y=yAt(v); return '<line x1="'+padL+'" x2="'+(padL+plotW)+'" y1="'+y+'" y2="'+y+'" stroke="var(--muted)" stroke-width="1" stroke-dasharray="2 3" opacity="0.6"/><text x="'+(padL+plotW)+'" y="'+(y-3)+'" text-anchor="end" font-size="8.5" fill="var(--muted)" font-family="IBM Plex Mono">'+label+'</text>'; }
+    var gid="dg"+Math.random().toString(36).slice(2,8);
+    var last=coords[coords.length-1];
+    var svgHtml='<svg viewBox="0 0 '+w+' '+h+'" preserveAspectRatio="none">'
+      +'<defs><linearGradient id="'+gid+'" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="'+color+'" stop-opacity="0.30"/><stop offset="100%" stop-color="'+color+'" stop-opacity="0"/></linearGradient></defs>'
+      +grid+refLine(thresholds.low,"low")+refLine(thresholds.critical,"crit")
+      +'<path d="'+area+'" fill="url(#'+gid+')" stroke="none"/>'
+      +'<path d="'+line+'" fill="none" stroke="'+color+'" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>'
+      +'<circle cx="'+last[0].toFixed(1)+'" cy="'+last[1].toFixed(1)+'" r="3.2" fill="'+color+'"/>'
+      +'<g id="'+gid+'-cross" style="display:none;"><line x1="0" x2="0" y1="'+padT+'" y2="'+(padT+plotH)+'" stroke="var(--ink-2)" stroke-width="1" stroke-dasharray="2 2"/><circle r="3.6" fill="'+color+'" stroke="var(--surface)" stroke-width="1.4"/></g>'
+      +'<rect x="0" y="0" width="'+w+'" height="'+h+'" fill="transparent" id="'+gid+'-hit"/></svg>';
+    box.innerHTML=svgHtml;
+    var legend=el("div",{class:"chart-legend"});
+    legend.innerHTML='<span>'+new Date(pts[0].t).toLocaleString(undefined,{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"})+'</span><span>'+new Date(pts[pts.length-1].t).toLocaleString(undefined,{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"})+'</span>';
+    box.appendChild(legend);
+    var tip=el("div",{class:"tooltip"}); box.appendChild(tip);
+    container.appendChild(box);
+    var svg=box.querySelector("svg"), hit=svg.querySelector("#"+gid+"-hit"), cross=svg.querySelector("#"+gid+"-cross"), crossCircle=cross.querySelector("circle");
+    function handleMove(clientX){
+      var rect=svg.getBoundingClientRect();
+      var relX=((clientX-rect.left)/rect.width)*w;
+      var idx=clamp(Math.round(((relX-padL)/plotW)*(pts.length-1)),0,pts.length-1);
+      var c=coords[idx];
+      cross.style.display="block";
+      cross.querySelector("line").setAttribute("x1",c[0]); cross.querySelector("line").setAttribute("x2",c[0]);
+      crossCircle.setAttribute("cx",c[0]); crossCircle.setAttribute("cy",c[1]);
+      tip.style.left=((c[0]/w)*100)+"%"; tip.style.top=((c[1]/h)*100)+"%";
+      tip.textContent=Math.round(pts[idx].level)+"% · "+new Date(pts[idx].t).toLocaleString(undefined,{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"});
+      tip.classList.add("show");
+    }
+    hit.addEventListener("mousemove",function(e){ handleMove(e.clientX); });
+    hit.addEventListener("mouseleave",function(){ cross.style.display="none"; tip.classList.remove("show"); });
+    hit.addEventListener("touchmove",function(e){ if(e.touches[0]) handleMove(e.touches[0].clientX); },{passive:true});
+  }
+  function typeIconSVG(type){ return '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">'+(ICONS[type]||ICONS.other)+'</svg>'; }
+
+  /* ============================================================
+     Supabase-backed store. One table, "battery_readings": every
+     row is one reported reading. Current status = latest row per
+     device_id; history = recent rows for that device_id.
+     ============================================================ */
+  var store = {
+    devices: [],
+    thresholds: Object.assign({}, DEFAULT_THRESHOLDS),
+    lastSync: null,
+    lastError: null,
+    listeners: [],
+
+    onChange:function(fn){ this.listeners.push(fn); },
+    _emit:function(){ this.listeners.forEach(function(fn){ fn(); }); },
+
+    async loadThresholds(){
+      try{
+        var res = await sb.from("app_settings").select("low,critical").eq("id",1).maybeSingle();
+        if (!res.error && res.data){ this.thresholds = { low:Number(res.data.low), critical:Number(res.data.critical) }; }
+      } catch(e){ /* keep defaults */ }
+      this._emit();
+    },
+    async setThresholds(t){
+      this.thresholds = t; this._emit();
+      try{ var res = await sb.from("app_settings").update({low:t.low, critical:t.critical}).eq("id",1); if (res.error) throw res.error; }
+      catch(e){ toast("Couldn't save thresholds: " + ((e&&e.message)||e)); }
+    },
+
+    async sync(){
+      try{
+        var res = await sb.from("battery_readings").select("*").order("recorded_at",{ascending:false}).limit(3000);
+        if (res.error) throw res.error;
+        var rows = res.data || [];
+        var byDevice = {};
+        rows.forEach(function(r){
+          if (!byDevice[r.device_id]) byDevice[r.device_id] = [];
+          byDevice[r.device_id].push(r);
+        });
+        var devices = Object.keys(byDevice).map(function(id){
+          var rs = byDevice[id]; // desc order (newest first)
+          var latest = rs[0];
+          var hist = rs.slice(0, HISTORY_PER_DEVICE).slice().reverse().map(function(r){ return {t:r.recorded_at, level:Number(r.level)}; });
+          return {
+            id: id,
+            name: latest.device_name,
+            type: latest.device_type || "other",
+            group: latest.group_name || "General",
+            level: Number(latest.level),
+            charging: !!latest.charging,
+            health: latest.health,
+            lastSeen: latest.recorded_at,
+            history: hist
+          };
+        });
+        this.devices = devices;
+        this.lastSync = new Date();
+        this.lastError = null;
+      } catch(e){
+        this.lastError = (e && e.message) || String(e);
+      }
+      this._emit();
+    },
+
+    async addReading(data){
+      var row = {
+        device_id: data.id, device_name: data.name, device_type: data.type,
+        group_name: data.group, level: data.level, charging: !!data.charging, health: data.health
+      };
+      var res = await sb.from("battery_readings").insert(row);
+      if (res.error) throw new Error(res.error.message);
+      await this.sync();
+    },
+
+    async deleteDevice(id){
+      var res = await sb.from("battery_readings").delete().eq("device_id", id);
+      if (res.error) throw new Error(res.error.message);
+      await this.sync();
+    }
+  };
+
+  /* ============ UI state ============ */
+  var ui = { groupFilter:"All", search:"", openId:null, drawerMode:null };
+
+  function currentDevices(){ return store.devices.slice().sort(function(a,b){ return (a.name||"").localeCompare(b.name||""); }); }
+  function filteredDevices(){
+    return currentDevices().filter(function(d){
+      if (ui.groupFilter!=="All" && (d.group||"General")!==ui.groupFilter) return false;
+      if (ui.search && d.name.toLowerCase().indexOf(ui.search.toLowerCase())===-1) return false;
+      return true;
+    });
+  }
+  function groupsList(){ var set={}; store.devices.forEach(function(d){ set[d.group||"General"]=true; }); return Object.keys(set).sort(); }
+
+  function renderLiveBadge(){
+    var b=document.getElementById("liveBadge");
+    if (store.lastError){ b.textContent="offline"; b.className="live-badge stale"; return; }
+    if (!store.lastSync){ b.textContent="connecting…"; b.className="live-badge off"; return; }
+    b.textContent="live"; b.className="live-badge";
+  }
+  function renderSyncNote(){
+    var n=document.getElementById("syncNote");
+    if (store.lastError){ n.textContent="Couldn't load battery data — check your connection and try Sync now."; return; }
+    if (!store.lastSync){ n.textContent="Syncing…"; return; }
+    n.textContent = "Synced " + relTime(store.lastSync.toISOString()) + " · polling every " + Math.round(POLL_MS/1000) + "s";
+  }
+
+  function renderStats(){
+    var devices=store.devices, t=store.thresholds;
+    var total=devices.length, charging=devices.filter(function(d){return d.charging;}).length;
+    var attn=devices.filter(function(d){return statusOf(d.level,t)!=="good";});
+    var crit=attn.filter(function(d){return statusOf(d.level,t)==="critical";});
+    var avg=total?Math.round(devices.reduce(function(s,d){return s+d.level;},0)/total):0;
+    var row=document.getElementById("statsRow"); row.innerHTML="";
+    row.appendChild(el("div",{class:"stat"},'<span class="eyebrow">Devices</span><div class="value mono">'+total+'</div><div class="sub">reporting in</div>'));
+    row.appendChild(el("div",{class:"stat"},'<span class="eyebrow">Charging now</span><div class="value mono">'+charging+'</div><div class="sub">plugged in</div>'));
+    row.appendChild(el("div",{class:"stat attn"+(crit.length?" has-critical":"")},'<span class="eyebrow">Needs attention</span><div class="value mono">'+attn.length+'</div><div class="sub">'+(crit.length?crit.length+" critical":(attn.length?"below "+t.low+"%":"all clear"))+'</div>'));
+    row.appendChild(el("div",{class:"stat"},'<span class="eyebrow">Average charge</span><div class="value mono">'+avg+'<span class="unit">%</span></div><div class="sub">across fleet</div>'));
+  }
+  function renderAlerts(){
+    var box=document.getElementById("alertsBox");
+    if (renderAlerts.dismissed){ box.innerHTML=""; return; }
+    var t=store.thresholds;
+    var attn=store.devices.filter(function(d){return statusOf(d.level,t)!=="good";}).sort(function(a,b){return a.level-b.level;});
+    if (!attn.length){ box.innerHTML=""; return; }
+    var hasCritical=attn.some(function(d){return statusOf(d.level,t)==="critical";});
+    var wrap=el("div",{class:"alerts"+(hasCritical?" critical":"")});
+    var iconPath = hasCritical ? '<path d="M12 9v4M12 17h.01M10.3 3.9 2.5 18a1.8 1.8 0 0 0 1.6 2.7h15.8a1.8 1.8 0 0 0 1.6-2.7L13.7 3.9a1.8 1.8 0 0 0-3.4 0Z"/>' : '<circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/>';
+    wrap.innerHTML='<svg class="a-icon icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">'+iconPath+'</svg>'
+      +'<div class="a-body"><div class="a-title">'+attn.length+' device'+(attn.length>1?"s":"")+' need'+(attn.length>1?"":"s")+' attention</div>'
+      +'<div class="a-chips">'+attn.map(function(d){ var s=statusOf(d.level,t); return '<button class="a-chip" data-open="'+d.id+'"><span class="dot" style="background:var(--'+s+')"></span>'+escapeHtml(d.name)+' · '+Math.round(d.level)+'%</button>'; }).join("")+'</div></div>'
+      +'<button class="btn btn-ghost close" id="alertsClose" aria-label="Dismiss"><svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18"/></svg></button>';
+    box.innerHTML=""; box.appendChild(wrap);
+    wrap.querySelectorAll("[data-open]").forEach(function(b){ b.addEventListener("click",function(){ openDrawer(b.getAttribute("data-open"),"view"); }); });
+    document.getElementById("alertsClose").addEventListener("click",function(){ renderAlerts.dismissed=true; renderAlerts(); });
+  }
+  function renderFilters(){
+    var wrap=document.getElementById("groupChips"); wrap.innerHTML="";
+    var groups=["All"].concat(groupsList());
+    groups.forEach(function(g){
+      var count = g==="All" ? store.devices.length : store.devices.filter(function(d){return (d.group||"General")===g;}).length;
+      var chip=el("button",{class:"chip","aria-pressed":(ui.groupFilter===g)}, escapeHtml(g)+' <span class="mono" style="opacity:.6">'+count+'</span>');
+      chip.addEventListener("click",function(){ ui.groupFilter=g; renderAll(); });
+      wrap.appendChild(chip);
+    });
+  }
+  function renderGrid(){
+    var grid=document.getElementById("deviceGrid"); grid.innerHTML="";
+    var list=filteredDevices();
+    if (!list.length){
+      grid.appendChild(el("div",{class:"empty"},
+        '<h3>'+(store.devices.length?"No devices match":"No readings yet")+'</h3>'
+        +'<p>'+(store.devices.length?"Try a different group or search term.":"Devices show up here automatically once the Windows script or the Android macro reports a reading.")+'</p>'));
+      return;
+    }
+    var t=store.thresholds;
+    list.forEach(function(d){
+      var status=statusOf(d.level,t);
+      var stale=isStale(d.lastSeen);
+      var card=el("button",{class:"card"+(stale?" stale":"")+(d.charging?" charging":"")});
+      card.innerHTML='<div class="card-head"><div class="type-icon">'+typeIconSVG(d.type)+'</div>'
+        +'<div class="names"><div class="device-name">'+escapeHtml(d.name)+'</div><div class="group-badge">'+escapeHtml(d.group||"General")+' · '+(TYPE_LABEL[d.type]||"Other")+'</div></div>'
+        +(stale?'<span class="status-pill stale-pill">No updates</span>':'<span class="status-pill '+status+'">'+statusLabel(status)+'</span>')+'</div>'
+        +'<div class="batt-row">'+batteryGlyphSVG(d.level,status,d.charging,42,20)+'<div><div class="batt-pct">'+Math.round(d.level)+'%</div><div class="batt-meta">'+(d.charging?"Charging · ":"")+relTime(d.lastSeen)+(stale?" · check device":"")+'</div></div></div>'
+        +'<div class="spark-wrap">'+sparklineSVG(d.history||[],status)+'</div>';
+      card.addEventListener("click",function(){ openDrawer(d.id,"view"); });
+      grid.appendChild(card);
+    });
+  }
+  function renderAll(){ renderLiveBadge(); renderSyncNote(); renderStats(); renderAlerts(); renderFilters(); renderGrid(); }
+
+  function openDrawer(id,mode){ ui.openId=id; ui.drawerMode=mode; document.getElementById("scrim").classList.add("open"); document.getElementById("drawer").classList.add("open"); renderDrawer(); }
+  function closeDrawer(){ document.getElementById("scrim").classList.remove("open"); document.getElementById("drawer").classList.remove("open"); ui.openId=null; ui.drawerMode=null; }
+  function typeOptionsHtml(sel){ return TYPES.map(function(t){ return '<option value="'+t.id+'"'+(t.id===sel?" selected":"")+'>'+t.label+'</option>'; }).join(""); }
+
+  function buildForm(d){
+    var wrap=el("div",{style:"display:flex;flex-direction:column;gap:16px;"});
+    wrap.innerHTML='<div class="field"><label for="f_name">Name</label><input type="text" id="f_name" value="'+(d?escapeHtml(d.name):"")+'" placeholder="e.g. iPhone 15 Pro"></div>'
+      +'<div class="field-row"><div class="field"><label for="f_type">Type</label><select id="f_type">'+typeOptionsHtml(d?d.type:"phone")+'</select></div>'
+      +'<div class="field"><label for="f_group">Group</label><input type="text" id="f_group" list="groupList" value="'+(d?escapeHtml(d.group||""):"General")+'"></div></div>'
+      +'<datalist id="groupList">'+groupsList().map(function(g){return '<option value="'+escapeHtml(g)+'">';}).join("")+'</datalist>'
+      +'<div class="field-row"><div class="field"><label for="f_level">Battery level (%)</label><input type="number" id="f_level" min="0" max="100" value="'+(d?Math.round(d.level):100)+'"></div>'
+      +'<div class="field"><label for="f_health">Battery health (%)</label><input type="number" id="f_health" min="0" max="100" value="'+(d&&d.health!=null?Math.round(d.health):100)+'"></div></div>'
+      +'<div class="checkbox-row"><input type="checkbox" id="f_charging" '+(d&&d.charging?"checked":"")+'><label for="f_charging" style="text-transform:none;font-weight:500;color:var(--ink);font-size:13.5px;">Currently charging</label></div>';
+    return wrap;
+  }
+  function readForm(existingId){
+    return {
+      id: existingId || slugify(document.getElementById("f_name").value),
+      name: document.getElementById("f_name").value.trim(),
+      type: document.getElementById("f_type").value,
+      group: document.getElementById("f_group").value.trim() || "General",
+      level: clamp(parseFloat(document.getElementById("f_level").value)||0,0,100),
+      health: clamp(parseFloat(document.getElementById("f_health").value)||0,0,100),
+      charging: document.getElementById("f_charging").checked
+    };
+  }
+  function wireDelete(btn,id){
+    var confirming=false;
+    btn.addEventListener("click",async function(){
+      if (!confirming){ confirming=true; btn.textContent="Confirm delete?"; setTimeout(function(){ if(confirming){confirming=false; btn.textContent="Delete";} },3500); return; }
+      try{ await store.deleteDevice(id); toast("Device removed"); closeDrawer(); } catch(e){ toast("Delete failed: "+e.message); }
+    });
+  }
+
+  function renderDrawer(){
+    var body=document.getElementById("drawerBody"), foot=document.getElementById("drawerFoot"), title=document.getElementById("drawerTitle");
+    body.innerHTML=""; foot.innerHTML="";
+    var d=store.devices.find(function(x){return x.id===ui.openId;});
+    if (!d){ closeDrawer(); return; }
+    var t=store.thresholds, status=statusOf(d.level,t);
+    if (ui.drawerMode==="edit"){
+      title.textContent="Edit "+d.name;
+      body.appendChild(buildForm(d));
+      foot.innerHTML='<button class="btn btn-danger" id="deleteBtn">Delete device</button><button class="btn btn-primary" id="saveEditBtn">Save as new reading</button>';
+      document.getElementById("saveEditBtn").addEventListener("click",async function(){
+        var data=readForm(d.id);
+        try{ await store.addReading(data); toast("Saved"); ui.drawerMode="view"; renderDrawer(); } catch(e){ toast("Couldn't save: "+e.message); }
+      });
+      wireDelete(document.getElementById("deleteBtn"), d.id);
+      return;
+    }
+    title.textContent=d.name;
+    var deviceStale=isStale(d.lastSeen);
+    var hero=el("div",{class:"detail-hero"+(deviceStale?" stale":"")+(d.charging?" charging":"")});
+    hero.innerHTML=batteryGlyphSVG(d.level,status,d.charging,74,34)+'<div class="batt-pct">'+Math.round(d.level)+'%</div>'
+      +(deviceStale?'<span class="status-pill stale-pill">No updates</span>':'<span class="status-pill '+status+'">'+statusLabel(status)+(d.charging?" · Charging":"")+'</span>')
+      +'<div class="batt-meta">'+(TYPE_LABEL[d.type]||"Other")+' · '+escapeHtml(d.group||"General")+(d.health!=null?' · health '+Math.round(d.health)+'%':'')+' · seen '+relTime(d.lastSeen)+(deviceStale?' · hasn\'t reported in over 30 minutes':'')+'</div>';
+    body.appendChild(hero);
+    var chartHost=el("div"); body.appendChild(chartHost); renderDetailChart(chartHost, d.history||[], t);
+    var quick=el("div",{class:"quicklog"});
+    quick.innerHTML='<div class="field"><label for="logInput">Log a reading (%)</label><input type="number" id="logInput" min="0" max="100" value="'+Math.round(d.level)+'"></div><button class="btn" id="logBtn">Save reading</button>';
+    body.appendChild(quick);
+    document.getElementById("logBtn").addEventListener("click",async function(){
+      var v=clamp(parseFloat(document.getElementById("logInput").value)||0,0,100);
+      try{ await store.addReading({id:d.id,name:d.name,type:d.type,group:d.group,level:v,health:d.health,charging:d.charging}); toast("Reading logged"); } catch(e){ toast("Couldn't log: "+e.message); }
+    });
+    foot.innerHTML='<button class="btn btn-danger" id="deleteBtn">Delete</button><button class="btn" id="editBtn">Edit details</button>';
+    document.getElementById("editBtn").addEventListener("click",function(){ ui.drawerMode="edit"; renderDrawer(); });
+    wireDelete(document.getElementById("deleteBtn"), d.id);
+  }
+
+  document.getElementById("drawerClose").addEventListener("click",closeDrawer);
+  document.getElementById("scrim").addEventListener("click",closeDrawer);
+  document.addEventListener("keydown",function(e){ if(e.key==="Escape") closeDrawer(); });
+  document.getElementById("searchInput").addEventListener("input",function(e){ ui.search=e.target.value; renderGrid(); });
+
+  var settingsBtn=document.getElementById("settingsBtn"), settingsPop=document.getElementById("settingsPop");
+  settingsBtn.addEventListener("click",function(){
+    var open=settingsPop.classList.toggle("open");
+    settingsBtn.setAttribute("aria-expanded", open?"true":"false");
+    if (open){
+      document.getElementById("lowThreshInput").value=store.thresholds.low;
+      document.getElementById("critThreshInput").value=store.thresholds.critical;
+    }
+  });
+  document.addEventListener("click",function(e){
+    if (!settingsPop.contains(e.target) && e.target!==settingsBtn && !settingsBtn.contains(e.target)){
+      settingsPop.classList.remove("open"); settingsBtn.setAttribute("aria-expanded","false");
+    }
+  });
+  function commitThresholds(){
+    var low=clamp(parseFloat(document.getElementById("lowThreshInput").value)||DEFAULT_THRESHOLDS.low,1,99);
+    var crit=clamp(parseFloat(document.getElementById("critThreshInput").value)||DEFAULT_THRESHOLDS.critical,1,99);
+    if (crit>=low) crit=Math.max(1,low-1);
+    store.setThresholds({low:low,critical:crit}); renderAll();
+  }
+  document.getElementById("lowThreshInput").addEventListener("change",commitThresholds);
+  document.getElementById("critThreshInput").addEventListener("change",commitThresholds);
+  document.getElementById("syncBtn").addEventListener("click",function(){ store.sync(); toast("Syncing…"); });
+
+  /* ============ auth gate (Google sign-in via Supabase Auth) ============
+     Consumer-facing: nobody sees a Supabase URL, a key, or the word
+     "Supabase" anywhere in this flow — just Sign in with Google, and either
+     the dashboard or a friendly "not on the list yet" screen. ============ */
+  store.onChange(renderAll);
+
+  var pollHandle = null;
+  function startPolling(){ if (pollHandle) return; pollHandle = setInterval(function(){ store.sync(); }, POLL_MS); }
+  function stopPolling(){ if (pollHandle){ clearInterval(pollHandle); pollHandle = null; } }
+
+  function showScreen(name){
+    document.getElementById("signInScreen").hidden = name!=="signin";
+    document.getElementById("notAuthorizedScreen").hidden = name!=="denied";
+    document.getElementById("app").hidden = name!=="app";
+  }
+
+  async function isAllowed(email){
+    try{
+      var res = await sb.from("allowed_users").select("email").eq("email", email).maybeSingle();
+      if (res.error) return false;
+      return !!res.data;
+    } catch(e){ return false; }
+  }
+
+  async function handleSession(session){
+    if (!session || !session.user){
+      stopPolling();
+      showScreen("signin");
+      return;
+    }
+    var email = session.user.email;
+    var allowed = await isAllowed(email);
+    if (!allowed){
+      stopPolling();
+      document.getElementById("deniedEmail").textContent = email;
+      showScreen("denied");
+      return;
+    }
+    document.getElementById("acctEmail").textContent = email;
+    document.getElementById("acctAvatar").textContent = email.charAt(0).toUpperCase();
+    showScreen("app");
+    await store.loadThresholds();
+    await store.sync();
+    startPolling();
+  }
+
+  document.getElementById("googleSignInBtn").addEventListener("click", async function(){
+    try{ await sb.auth.signInWithOAuth({ provider:"google", options:{ redirectTo: window.location.href } }); }
+    catch(e){ toast("Couldn't start sign-in: " + ((e&&e.message)||e)); }
+  });
+  document.getElementById("tryAnotherBtn").addEventListener("click", async function(){
+    await sb.auth.signOut();
+    await sb.auth.signInWithOAuth({ provider:"google", options:{ redirectTo: window.location.href } });
+  });
+  document.getElementById("signOutBtn").addEventListener("click", async function(){
+    settingsPop.classList.remove("open");
+    await sb.auth.signOut();
+  });
+
+  sb.auth.onAuthStateChange(function(_event, session){ handleSession(session); });
+  sb.auth.getSession().then(function(res){ handleSession(res.data.session); });
+
+  /* ============ installable app (PWA) ============ */
+  if ("serviceWorker" in navigator){
+    window.addEventListener("load", function(){
+      navigator.serviceWorker.register("sw.js").catch(function(){ /* fine without it */ });
+    });
+  }
+
+  var deferredInstallPrompt = null;
+  var installBtn = document.getElementById("installBtn");
+  window.addEventListener("beforeinstallprompt", function(e){
+    e.preventDefault();
+    deferredInstallPrompt = e;
+    installBtn.hidden = false;
+  });
+  installBtn.addEventListener("click", async function(){
+    if (!deferredInstallPrompt) return;
+    installBtn.hidden = true;
+    deferredInstallPrompt.prompt();
+    try { await deferredInstallPrompt.userChoice; } catch(e){}
+    deferredInstallPrompt = null;
+  });
+  window.addEventListener("appinstalled", function(){ installBtn.hidden = true; toast("Installed"); });
+
+  (function iosInstallHint(){
+    var isStandalone = window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
+    var isIos = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+    var dismissed = false;
+    try { dismissed = localStorage.getItem("cellwatch_ios_hint_dismissed") === "1"; } catch(e){}
+    if (isIos && !isStandalone && !dismissed){
+      var hint = document.getElementById("iosInstallHint");
+      hint.style.display = "flex";
+      document.getElementById("iosHintClose").addEventListener("click", function(){
+        hint.style.display = "none";
+        try { localStorage.setItem("cellwatch_ios_hint_dismissed","1"); } catch(e){}
+      });
+    }
+  })();
+})();
+</script>
+</body>
+</html>
